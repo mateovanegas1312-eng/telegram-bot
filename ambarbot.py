@@ -223,8 +223,13 @@ async def enviar_contenido(user_id, paquete, context):
 
 # ================== MAIN ==================
 
+import os
+from telegram.ext import Application
+
+PORT = int(os.environ.get("PORT", 10000))
+
 def main():
-    app = ApplicationBuilder().token(TOKEN).build()
+    app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(seleccionar_paquete, pattern="^paquete_"))
@@ -234,13 +239,13 @@ def main():
 
     print("Bot encendido 🔥")
 
-    app.run_polling(close_loop=False)
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=f"https://TU-SERVICIO.onrender.com",
+    )
 
 
 if __name__ == "__main__":
     main()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
 
