@@ -1,251 +1,243 @@
-import random
-import sqlite3
 import os
-from datetime import datetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
+)
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     CallbackQueryHandler,
     MessageHandler,
     ContextTypes,
-    filters,
+    filters
 )
 
-TOKEN = "8581605737:AAFwEA0SrrwqkAtujaEE2wqquwz1znDG2rM"
+import os
+TOKEN = os.getenv("TOKEN")
 ADMIN_ID = 8695861346
-
-# -------- RUTA BASE -------- #
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# -------- BASE DE DATOS -------- #
+usuarios_paquetes = {}
 
-conn = sqlite3.connect(os.path.join(BASE_DIR, "clientes.db"), check_same_thread=False)
-cursor = conn.cursor()
+# ================== PRECIOS ==================
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS clientes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    nombre TEXT,
-    paquete TEXT,
-    precio INTEGER,
-    estado TEXT,
-    fecha TEXT
-)
-""")
-conn.commit()
-
-def guardar_cliente(user_id, nombre, paquete, precio, estado):
-    fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    cursor.execute("""
-        INSERT INTO clientes (user_id, nombre, paquete, precio, estado, fecha)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (user_id, nombre, paquete, precio, estado, fecha))
-    conn.commit()
-
-def marcar_pagado(user_id):
-    cursor.execute("""
-    UPDATE clientes
-    SET estado = 'Pagado'
-    WHERE id = (
-        SELECT id FROM clientes
-        WHERE user_id = ?
-        ORDER BY id DESC
-        LIMIT 1
-    )
-    """, (user_id,))
-    conn.commit()
-
-# -------- PAQUETES -------- #
-
-paquetes = {
-    "basico": {"precio": 10000},
-    "medio": {"precio": 15000},
-    "premium": {"precio": 20000}
+PRECIOS = {
+    "basico": "10.000",
+    "medio": "15.000",
+    "premium": "20.000",
+    "suscripcion": "30.000"
 }
 
-# -------- MENUS -------- #
+# ================== ARCHIVOS ==================
 
-def menu_edad():
-    keyboard = [
-        [InlineKeyboardButton("🔞 Soy mayor de 18", callback_data="mayor")],
-        [InlineKeyboardButton("❌ Salir", callback_data="salir")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
+ARCHIVOS = {
+    "basico": ["basico1.jpeg","basico2.jpeg","basico3.jpeg","basico1.mp4"],
+    "medio": ["medio1.jpeg","medio2.jpeg","medio3.jpeg","medio1.mp4","medio2.mp4"],
+    "premium": ["premium1.jpeg","premium2.jpeg","premium3.jpeg","premium4.jpeg","premium1.mp4","premium2.mp4"]
+}
 
-def menu_paquetes():
-    keyboard = [
-        [InlineKeyboardButton("🔥 Básico - 3 fotos + 2 videos ($10.000)", callback_data="basico")],
-        [InlineKeyboardButton("🔥 Medio - 4 fotos + 2 videos ($15.000)", callback_data="medio")],
-        [InlineKeyboardButton("🔥 Premium - 3 fotos + 2 videos ($20.000)", callback_data="premium")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-def menu_pago():
-    keyboard = [
-        [InlineKeyboardButton("💜 Nequi", callback_data="nequi")],
-        [InlineKeyboardButton("🏦 Bancolombia", callback_data="bancolombia")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-# -------- START -------- #
+# ================== START ==================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    nombre = update.message.from_user.first_name
 
-    mensajes = [
-        f"Hola {nombre} 😊 gracias por estar aquí.\n\nMira los paquetes y dime cuál te gusta más 💕",
-        f"{nombre} hola... qué bueno verte por aquí 😌\n\nRevisa lo que tengo preparado y elige tranquilo 😉",
-        f"Bienvenido {nombre} 💋\n\nPasa, mira los paquetes y dime cuál prefieres."
-    ]
+    bienvenida_path = os.path.join(BASE_DIR, "bienvenida.jpeg")
 
-    texto = random.choice(mensajes)
+    if os.path.exists(bienvenida_path):
+        with open(bienvenida_path, "rb") as photo:
+            await update.message.reply_photo(photo=photo)
 
-    await update.message.reply_photo(
-        photo=open(os.path.join(BASE_DIR, "bienvenida.jpeg"), "rb"),
-        caption=texto,
-        reply_markup=menu_edad(),
-        protect_content=True
+    texto = (
+        "Hola mi amor 😘🔥\n\n"
+        "Estos son mis paquetes disponibles:\n\n"
+        "💎 *BÁSICO*\n"
+        "• 3 fotos + 1 video\n"
+        "• Precio: *$10.000 COP*\n\n"
+        "🔥 *MEDIO*\n"
+        "• 3 fotos + 2 videos\n"
+        "• Precio: *$15.000 COP*\n\n"
+        "👑 *PREMIUM*\n"
+        "• 4 fotos + 2 videos\n"
+        "• Precio: *$20.000 COP*\n\n"
+        "💖 *SUSCRIPCIÓN MENSUAL*\n"
+        "• Todo el contenido (Básico + Medio + Premium)\n"
+        "• Precio: *$30.000 COP*\n\n"
+        "Elige el que quieras abajo 😏👇"
     )
 
-# -------- VERIFICAR EDAD -------- #
+    keyboard = [
+        [InlineKeyboardButton("💎 Básico - $10.000", callback_data="paquete_basico")],
+        [InlineKeyboardButton("🔥 Medio - $15.000", callback_data="paquete_medio")],
+        [InlineKeyboardButton("👑 Premium - $20.000", callback_data="paquete_premium")],
+        [InlineKeyboardButton("💖 Suscripción - $30.000", callback_data="paquete_suscripcion")]
+    ]
 
-async def verificar_edad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-    if query.data == "mayor":
-        await query.message.reply_text(
-            "Perfecto 💕 elige el paquete:",
-            reply_markup=menu_paquetes()
-        )
-    else:
-        await query.message.reply_text("Cuando quieras volver aquí estaré 😊")
+    await update.message.reply_text(
+        texto,
+        parse_mode="Markdown",
+        reply_markup=reply_markup
+    )
 
-# -------- SELECCIONAR PAQUETE -------- #
+# ================== SELECCIONAR PAQUETE ==================
 
 async def seleccionar_paquete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    paquete = query.data
-    context.user_data["paquete"] = paquete
-    precio = paquetes[paquete]["precio"]
+    paquete = query.data.split("_")[1]
+    user_id = query.from_user.id
 
-    await query.message.reply_text(
-        f"Total: ${precio} COP 💰\n\nSelecciona método de pago:",
-        reply_markup=menu_pago()
+    usuarios_paquetes[user_id] = paquete
+
+    keyboard = [
+        [InlineKeyboardButton("💜 Nequi", callback_data="pago_nequi")],
+        [InlineKeyboardButton("🏦 Bancolombia", callback_data="pago_bancolombia")]
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(
+        f"Elegiste *{paquete.upper()}* 😏🔥\n"
+        f"Valor: *${PRECIOS[paquete]} COP*\n\n"
+        "Elige tu método de pago:",
+        parse_mode="Markdown",
+        reply_markup=reply_markup
     )
 
-# -------- SELECCIONAR PAGO -------- #
+# ================== METODO DE PAGO ==================
 
-async def seleccionar_pago(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def metodo_pago(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    metodo = query.data
-    paquete = context.user_data["paquete"]
-    precio = paquetes[paquete]["precio"]
-    user_id = query.from_user.id
-    nombre = query.from_user.first_name
-
-    guardar_cliente(user_id, nombre, paquete, precio, "Pendiente")
+    metodo = query.data.split("_")[1]
 
     if metodo == "nequi":
-        texto = f"💜 Nequi\nNúmero: 3204967458\nValor: ${precio}\n\nEnvía el comprobante."
+        cuenta = "Nequi: 3001234567"
     else:
-        texto = f"🏦 Bancolombia\nCuenta: 1001211111111\nValor: ${precio}\n\nEnvía el comprobante."
+        cuenta = "Bancolombia Ahorros: 12345678901"
 
-    await query.message.reply_text(texto)
+    await query.edit_message_text(
+        f"Perfecto mi amor 💕\n\n"
+        f"Envía el pago a:\n\n*{cuenta}*\n\n"
+        "Cuando pagues mándame el comprobante aquí 📸",
+        parse_mode="Markdown"
+    )
+
+# ================== RECIBIR COMPROBANTE ==================
+
+async def recibir_comprobante(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if not update.message.photo:
+        return
+
+    user_id = update.message.from_user.id
+
+    if user_id not in usuarios_paquetes:
+        await update.message.reply_text("Primero elige un paquete con /start 💕")
+        return
+
+    paquete = usuarios_paquetes[user_id]
+
+    await context.bot.forward_message(
+        chat_id=ADMIN_ID,
+        from_chat_id=user_id,
+        message_id=update.message.message_id
+    )
+
+    keyboard = [
+        [InlineKeyboardButton(
+            "✅ Confirmar Pago",
+            callback_data=f"confirmar_{user_id}"
+        )]
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
     await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=f"🆕 Nuevo comprador\nNombre: {nombre}\nID: {user_id}\nPaquete: {paquete}\nMétodo: {metodo}"
+        text=f"Comprobante recibido\nUsuario: {user_id}\nPaquete: {paquete}",
+        reply_markup=reply_markup
     )
 
-# -------- RECIBIR COMPROBANTE -------- #
+    await update.message.reply_text(
+        "Recibí tu comprobante mi amor 💕\n"
+        "Estoy verificando el pago 😘"
+    )
 
-async def recibir_comprobante(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.photo:
-        user_id = update.message.from_user.id
-        paquete = context.user_data.get("paquete")
-
-        keyboard = [
-            [InlineKeyboardButton("✅ Confirmar Pago", callback_data=f"confirmar_{user_id}")]
-        ]
-
-        await context.bot.send_photo(
-            chat_id=ADMIN_ID,
-            photo=update.message.photo[-1].file_id,
-            caption=f"📸 Comprobante\nID: {user_id}\nPaquete: {paquete}",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-
-        await update.message.reply_text("Comprobante recibido 💕 confirmo en breve.")
-
-# -------- CONFIRMAR Y ENTREGAR -------- #
+# ================== CONFIRMAR PAGO ==================
 
 async def confirmar_pago(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.from_user.id != ADMIN_ID:
+    user_id = int(query.data.split("_")[1])
+
+    if user_id not in usuarios_paquetes:
+        await query.edit_message_text("Usuario no encontrado.")
         return
 
-    user_id = int(query.data.split("_")[1])
-    paquete = context.user_data.get("paquete")
+    paquete = usuarios_paquetes[user_id]
 
-    marcar_pagado(user_id)
-
-    if paquete == "basico":
-        fotos = ["basico1.jpeg", "basico2.jpeg", "basico3.jpeg"]
-        videos = ["basico1.mp4", "basico2.mp4"]
-    elif paquete == "medio":
-        fotos = ["medio1.jpeg", "medio2.jpeg", "medio3.jpeg", "medio4.jpeg"]
-        videos = ["medio1.mp4", "medio2.mp4"]
-    else:
-        fotos = ["premium1.jpeg", "premium2.jpeg", "premium3.jpeg"]
-        videos = ["premium1.mp4", "premium2.mp4"]
-
-    media = [
-        InputMediaPhoto(open(os.path.join(BASE_DIR, "packs", f), "rb"))
-        for f in fotos
-    ]
-
-    await context.bot.send_media_group(
-        chat_id=user_id,
-        media=media,
-        protect_content=True
-    )
-
-    for v in videos:
-        await context.bot.send_video(
-            chat_id=user_id,
-            video=open(os.path.join(BASE_DIR, "packs", v), "rb"),
-            protect_content=True
-        )
+    await query.edit_message_text("Pago confirmado ✅")
 
     await context.bot.send_message(
         chat_id=user_id,
-        text="Pago confirmado 💕 aquí tienes tu contenido.",
-        protect_content=True
+        text="Ya confirmamos tu comprobante mi amor 😘💖\n"
+             "Aquí está tu contenido 🔥"
     )
 
-    await query.edit_message_caption(
-        caption=query.message.caption + "\n\n✅ Entregado"
-    )
+    await enviar_contenido(user_id, paquete, context)
 
-# -------- APP -------- #
+# ================== ENVIAR CONTENIDO ==================
 
-app = ApplicationBuilder().token(TOKEN).build()
+async def enviar_contenido(user_id, paquete, context):
 
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(verificar_edad, pattern="^(mayor|salir)$"))
-app.add_handler(CallbackQueryHandler(seleccionar_paquete, pattern="^(basico|medio|premium)$"))
-app.add_handler(CallbackQueryHandler(seleccionar_pago, pattern="^(nequi|bancolombia)$"))
-app.add_handler(CallbackQueryHandler(confirmar_pago, pattern="^confirmar_"))
-app.add_handler(MessageHandler(filters.PHOTO, recibir_comprobante))
+    packs_dir = BASE_DIR
 
-app.run_polling(drop_pending_updates=True)
+    # Si es suscripción manda TODO junto
+    if paquete == "suscripcion":
+        lista_final = (
+            ARCHIVOS["basico"] +
+            ARCHIVOS["medio"] +
+            ARCHIVOS["premium"]
+        )
+    else:
+        lista_final = ARCHIVOS[paquete]
+
+    for archivo in lista_final:
+        path = os.path.join(packs_dir, archivo)
+
+        if not os.path.exists(path):
+            print("NO EXISTE:", path)
+            continue
+
+        with open(path, "rb") as f:
+            if archivo.endswith(".mp4"):
+                await context.bot.send_video(chat_id=user_id, video=f)
+            else:
+                await context.bot.send_photo(chat_id=user_id, photo=f)
+
+# ================== MAIN ==================
+
+import asyncio
+
+async def main():
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(seleccionar_paquete, pattern="^paquete_"))
+    app.add_handler(CallbackQueryHandler(metodo_pago, pattern="^pago_"))
+    app.add_handler(CallbackQueryHandler(confirmar_pago, pattern="^confirmar_"))
+    app.add_handler(MessageHandler(filters.PHOTO, recibir_comprobante))
+
+    print("Bot encendido 🔥")
+
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
