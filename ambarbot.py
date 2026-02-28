@@ -223,9 +223,7 @@ async def enviar_contenido(user_id, paquete, context):
 
 # ================== MAIN ==================
 
-import asyncio
-
-async def main():
+def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -236,8 +234,13 @@ async def main():
 
     print("Bot encendido 🔥")
 
-    await app.run_polling()
+    app.run_polling(close_loop=False)
+
+
+if __name__ == "__main__":
+    main()
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+
