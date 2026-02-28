@@ -242,10 +242,11 @@ def main():
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_url=f"https://TU-SERVICIO.onrender.com",
+        webhook_url=f"https://telegram-bot-zcvk.onrender.com/",
     )
 
 
 if __name__ == "__main__":
     main()
+
 
